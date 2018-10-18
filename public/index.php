@@ -1,5 +1,6 @@
 <?php
 use Medoo\Medoo;
+use Particle\Validator\Validator;
 
 require_once '../vendor/autoload.php';
 
@@ -13,23 +14,56 @@ $database = new medoo([
 ]);
 
 $comment = new SitePoint\Comment($database);
-$comment->setEmail('bruno@skvorc.me')
-        ->setName('Bruno Skvorc')
-        ->setComment('Hooray! Saving comments works!')
-        ->save();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $v = new Validator();
+    $v->required('name')->lengthBetween(1, 100)->alnum(true);
+    $v->required('email')->email()->lengthBetween(5, 255);
+    $v->required('comment')->lengthBetween(10, null);
+
+    $result = $v->validate($_POST);
+
+    if ($result->isValid()) {
+        try {
+            $comment
+                ->setName($_POST['name'])
+                ->setEmail($_POST['email'])
+                ->setComment($_POST['comment'])
+                ->save();
+            
+            header('Location: /');
+            return;
+        } catch (\Exception $e) {
+            die($e->getMessage());
+        }
+    } else {
+        dump($result->getMessages());
+    }
+}
+
+$comments = $database->select("comments", "*");
 
 ?>
 
 <!doctype html>
 <head>
     <title></title>
+    <link rel="stylesheet" href="css/custom.css">
 </head>
 <body>
-  <form method="post">
-    <label for="">Name: <input type="text" name="name" placeholder="Your name"></label>
-    <label for="">Email: <input type="text" name="email" placeholder="your@email.com"></label>
-    <label for="">Comment: <textarea name="comment" cols="30" rows="10"></textarea></label>
-    <input type="submit" value="Save">
-  </form>
+    <?php foreach ($comment->findAll() as $comment) : ?>
+        <div class="comment">
+            <h3>On <?= $comment->getSubmissionDate() ?>, <?= $comment->getName() ?> wrote:</h3>
+
+            <p><?= $comment->getComment(); ?></p>
+        </div>
+    <?php endforeach; ?>
+
+    <form method="post">
+        <label for="">Name: <input type="text" name="name" placeholder="Your name"></label>
+        <label for="">Email: <input type="text" name="email" placeholder="your@email.com"></label>
+        <label for="">Comment: <textarea name="comment" cols="30" rows="10"></textarea></label>
+        <input type="submit" value="Save">
+    </form>
 </body>
 </html>
